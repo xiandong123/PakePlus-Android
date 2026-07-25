@@ -1,0 +1,321 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    .map-box {
+      position: relative;
+      width: 100%;
+      height: 200px;
+      background: #c5e3ff url("./lampang_map.jpg") center/cover;
+      overflow: hidden;
+    }
+    /* 已完全删除.my-pos定位蓝点样式 */
+    /* 页面容器，多页面切换 */
+    .page { display: none; }
+    .page.active { display: block; }
+    /* 底部导航栏 */
+    .tab-item { flex:1; text-align:center; padding:8px 0; font-size:13px; }
+    .tab-item.active { color:#2563eb; border-top:2px solid #2563eb; }
+    /* 弹窗样式 */
+    .pop-box {
+      position: fixed;
+      inset:0;
+      background:rgba(0,0,0,0.4);
+      z-index:99;
+      display:none;
+    }
+    .pop-box.show { display:flex; align-items:flex-end; }
+    .pop-content {
+      width:100%;
+      background:#fff;
+      border-radius:16px 16px 0 0;
+      padding:20px;
+      max-height:70vh;
+      overflow-y:auto;
+    }
+  </style>
+</head>
+<body class="max-w-md mx-auto bg-gray-100 min-h-screen flex flex-col">
+  <!-- 页面1：接单首页 -->
+  <div id="page-order" class="page active flex-1 overflow-y-auto">
+    <div class="p-2">
+      <div class="map-box" id="map">
+        <!-- 已删除多余蓝色定位圆点div，仅保留地图截图本身 -->
+      </div>
+      <!-- 运力+场景控制区 -->
+      <div class="bg-white p-3 text-sm space-y-2 rounded shadow">
+        <div class="flex items-center gap-2 flex-wrap">
+          <span>在线网约车：<span id="carCount" class="font-bold text-green-600">2</span>台</span>
+          <button onclick="addCar()" class="px-2 py-1 bg-green-500 text-white rounded text-xs">+车辆</button>
+          <button onclick="reduceCar()" class="px-2 py-1 bg-red-500 text-white rounded text-xs">-车辆(制造溢价)</button>
+        </div>
+        <div class="flex items-center gap-2 flex-wrap">
+          <span>时段场景：</span>
+          <button onclick="setTime('normal')" class="px-2 py-1 bg-gray-300 rounded text-xs">平峰</button>
+          <button onclick="setTime('rush')" class="px-2 py-1 bg-orange-400 text-white rounded text-xs">早晚高峰</button>
+          <button onclick="setTime('night')" class="px-2 py-1 bg-indigo-500 text-white rounded text-xs">夜间23-6点</button>
+        </div>
+        <div class="flex items-center gap-2 flex-wrap">
+          <span>天气：</span>
+          <button onclick="setWeather('sun')" class="px-2 py-1 bg-yellow-300 rounded text-xs">晴天</button>
+          <button onclick="setWeather('rain')" class="px-2 py-1 bg-blue-400 text-white rounded text-xs">暴雨</button>
+        </div>
+        <div class="flex items-center gap-2 flex-wrap">
+          <span>订单类型：</span>
+          <button onclick="setOrderType('normal')" class="px-2 py-1 bg-gray-300 rounded text-xs">普通实时单</button>
+          <button onclick="setOrderType('station')" class="px-2 py-1 bg-amber-500 text-white rounded text-xs">机场/场站单</button>
+          <button onclick="setOrderType('cross')" class="px-2 py-1 bg-rose-500 text-white rounded text-xs">跨城长途预约</button>
+        </div>
+      </div>
+    </div>
+    <!-- 订单列表 -->
+    <div class="p-3 space-y-3" id="orderList"></div>
+  </div>
+
+  <!-- 页面2：溢价规则说明页 -->
+  <div id="page-rule" class="page flex-1 overflow-y-auto p-4">
+    <h2 class="text-lg font-bold mb-3">溢价完整规则说明</h2>
+    <div class="bg-white rounded p-4 space-y-4 shadow text-sm">
+      <div>
+        <h3 class="font-bold text-green-600">一、实时供需调价（核心）</h3>
+        <p>区域车辆越少，加价倍率越高，封顶1.5倍；溢价100%归司机，平台不抽成</p>
+        <p>≥4台车：无溢价｜2-3台车：1.2倍｜≤1台车：1.7倍（封顶1.5）</p>
+      </div>
+      <div>
+        <h3 class="font-bold text-orange-500">二、时段场景加成</h3>
+        <p>早晚高峰7-9/17-19点：+20%加成</p>
+        <p>夜间23:00-6:00：固定夜间服务费</p>
+      </div>
+      <div>
+        <h3 class="font-bold text-blue-500">三、天气/场站/跨城专项溢价</h3>
+        <p>暴雨恶劣天气：额外+30%加价</p>
+        <p>机场/高铁站：场站返程补贴</p>
+        <p>跨城长途：基础单价上浮，等候阶梯计费</p>
+      </div>
+      <div>
+        <h3 class="font-bold text-sky-700">四、司机资质限制</h3>
+        <p>✅ 双证齐全：可接全部高价溢价单池</p>
+        <p>❌ 无证/单证：仅短途低价单，无法触发高额溢价</p>
+        <p>服务分＞95：优先派高溢价订单；低分仅特惠单</p>
+      </div>
+      <div>
+        <h3 class="font-bold text-gray-700">五、结算分配规则</h3>
+        <p>平台抽成上限27%，月单达标降至25%</p>
+        <p>动态溢价、场站补贴全部不计入平台抽成基数</p>
+        <p>高速费、停车费由乘客额外支付，全额归司机</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- 页面3：司机资质&服务分页面 -->
+  <div id="page-driver" class="page flex-1 overflow-y-auto p-4">
+    <h2 class="text-lg font-bold mb-3">我的司机资质与派单权限</h2>
+    <div class="bg-white rounded p-4 shadow space-y-4">
+      <div class="flex justify-between items-center border-b pb-3">
+        <span>人证+车证（双证齐全）</span>
+        <button id="certBtn" onclick="switchCert()" class="px-3 py-1 bg-green-500 text-white rounded text-xs">已持证</button>
+      </div>
+      <div class="flex justify-between items-center border-b pb-3">
+        <span>服务口碑分</span>
+        <div class="flex items-center gap-2">
+          <span id="scoreText" class="text-xl font-bold text-green-600">98</span>
+          <button onclick="switchScore()" class="px-2 py-1 bg-gray-400 text-white rounded text-xs">切换分数</button>
+        </div>
+      </div>
+      <div class="mt-4">
+        <h3 class="font-bold mb-2">当前派单权限</h3>
+        <div id="powerBox" class="p-3 rounded bg-green-100 text-sm">
+          双证齐全+高分98：解锁机场、长途、高峰高额溢价订单池，优先派单
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 底部导航 -->
+  <div class="bg-white flex border-t mt-auto">
+    <div class="tab-item active" onclick="switchPage('order')">接单首页</div>
+    <div class="tab-item" onclick="switchPage('rule')">溢价规则</div>
+    <div class="tab-item" onclick="switchPage('driver')">我的资质</div>
+  </div>
+
+  <!-- 订单结算详情弹窗 -->
+  <div id="tipBox" class="pop-box">
+    <div class="pop-content">
+      <h3 class="font-bold text-lg mb-2">订单完整结算明细</h3>
+      <div id="tipText" class="text-sm space-y-1"></div>
+      <button onclick="hideTip()" class="mt-4 w-full bg-blue-500 text-white py-2 rounded">关闭</button>
+    </div>
+  </div>
+
+<script>
+// 全局控制变量
+let onlineCarNum = 2;
+let timeMode = "normal"; // normal/rush/night
+let weatherMode = "sun"; // sun/rain
+let orderType = "normal"; // normal/station/cross
+let hasCert = true; // 是否双证
+let serviceScore = 98; // 服务分
+
+// 订单基础数据
+const baseOrders = [
+  {id:'A', km:2.3, basePrice:18, start:'Tree Tara酒店', end:'Homfae饮品店'},
+  {id:'B', km:3.7, basePrice:25, start:'Lampang Town', end:'11号高速路口'},
+  {id:'C', km:1.2, basePrice:12, start:'本地夜市', end:'城东民宿街区'},
+]
+
+// 页面切换
+function switchPage(pageName){
+  document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
+  document.getElementById(`page-${pageName}`).classList.add('active');
+  document.querySelectorAll('.tab-item').forEach(t=>t.classList.remove('active'));
+  event.target.classList.add('active');
+}
+
+// 切换司机双证状态
+function switchCert(){
+  hasCert = !hasCert;
+  const btn = document.getElementById('certBtn');
+  const powerBox = document.getElementById('powerBox');
+  if(hasCert){
+    btn.innerText = "已持证";
+    btn.className = "px-3 py-1 bg-green-500 text-white rounded text-xs";
+    powerBox.className = "p-3 rounded bg-green-100 text-sm";
+    powerBox.innerHTML = "双证齐全+高分"+serviceScore+"：解锁机场、长途、高峰高额溢价订单池，优先派单";
+  }else{
+    btn.innerText = "无证";
+    btn.className = "px-3 py-1 bg-red-500 text-white rounded text-xs";
+    powerBox.className = "p-3 rounded bg-red-100 text-sm";
+    powerBox.innerHTML = "无证限流：仅推送3公里内短途特惠单，无法触发任何高额溢价";
+  }
+  calcOrderPrice();
+}
+
+// 切换服务分
+function switchScore(){
+  serviceScore = serviceScore >=95 ? 82 : 98;
+  document.getElementById('scoreText').innerText = serviceScore;
+  switchCert();
+}
+
+// 切换时段
+function setTime(type){
+  timeMode = type;
+  calcOrderPrice();
+}
+// 切换天气
+function setWeather(type){
+  weatherMode = type;
+  calcOrderPrice();
+}
+// 切换订单类型
+function setOrderType(type){
+  orderType = type;
+  calcOrderPrice();
+}
+
+// 综合计算全部溢价系数
+function getAllPremium(){
+  let descList = [];
+  let totalRate = 1;
+  // 1. 供需车辆溢价
+  let supplyRate = 1;
+  if(onlineCarNum <=1){
+    supplyRate = 1.7;
+    descList.push("运力紧缺溢价70%（封顶1.5倍）");
+  }else if(onlineCarNum <=3){
+    supplyRate = 1.2;
+    descList.push("区域车辆偏少，供需溢价20%");
+  }else{
+    descList.push("当前运力充足，无供需溢价");
+  }
+  totalRate *= supplyRate;
+
+  // 2. 时段溢价
+  if(timeMode === "rush"){
+    totalRate *= 1.2;
+    descList.push("早晚高峰时段加成20%");
+  }else if(timeMode === "night"){
+    totalRate *= 1.15;
+    descList.push("夜间23-6点夜间服务费15%");
+  }
+  // 3. 天气溢价
+  if(weatherMode === "rain"){
+    totalRate *= 1.3;
+    descList.push("暴雨恶劣天气加价30%");
+  }
+  // 4. 订单类型溢价
+  if(orderType === "station"){
+    totalRate *= 1.18;
+    descList.push("机场场站返程补贴18%");
+  }else if(orderType === "cross"){
+    totalRate *= 1.4;
+    descList.push("跨城长途基础单价上浮40%");
+  }
+  // 封顶1.5倍
+  if(totalRate > 1.5) totalRate = 1.5;
+
+  // 无证限制溢价
+  let limitTip = "";
+  if(!hasCert || serviceScore <95){
+    totalRate = Math.min(totalRate,1.1);
+    limitTip = `<br><span class="text-red-500">⚠️ 资质限制：${!hasCert?"无证":"服务分不足95分"}，溢价倍率强制封顶1.1倍</span>`;
+  }
+
+  return {rate: totalRate, desc: descList.join("<br>") + limitTip};
+}
+
+// 刷新订单价格
+function calcOrderPrice(){
+  const premium = getAllPremium();
+  const listDom = document.getElementById('orderList');
+  listDom.innerHTML = '';
+  document.getElementById('carCount').innerText = onlineCarNum;
+
+  baseOrders.forEach(ord=>{
+    const finalPrice = (ord.basePrice * premium.rate).toFixed(1);
+    const div = document.createElement('div');
+    div.className = 'bg-white p-4 rounded shadow cursor-pointer';
+    div.onclick = ()=>showTip(ord, finalPrice, premium);
+    div.innerHTML = `
+      <div>订单${ord.id} | 距离：${ord.km}km</div>
+      <div class="text-red-500 text-lg font-bold">车费：${finalPrice} 泰铢</div>
+      <div class="text-sm text-gray-500">起点：${ord.start} → 终点：${ord.end}</div>
+    `;
+    listDom.appendChild(div);
+  })
+}
+
+// 弹窗完整结算明细
+function showTip(order, price, premium){
+  const base = order.basePrice;
+  const driverGet = (price * 0.75).toFixed(1); // 平台抽25%
+  document.getElementById('tipText').innerHTML = `
+    <div class="border-b pb-2 mb-2">
+      <div>基础里程费：${base} 泰铢</div>
+      <div class="mt-1">加价构成：<br>${premium.desc}</div>
+    </div>
+    <div>乘客实付总价：<strong class="text-red-500 text-lg">${price} 泰铢</strong></div>
+    <div class="mt-2 border-t pt-2">
+      <div>平台综合抽成（25%）：${(price*0.25).toFixed(1)} 泰铢</div>
+      <div class="font-bold text-green-600">司机最终到手：${driverGet} 泰铢</div>
+      <div class="text-xs text-gray-500 mt-1">注：所有动态溢价全额归司机，不计入平台抽成基数</div>
+    </div>
+  `;
+  document.getElementById('tipBox').classList.add('show');
+}
+function hideTip(){
+  document.getElementById('tipBox').classList.remove('show');
+}
+
+// 增减车辆
+function addCar(){ onlineCarNum++; calcOrderPrice(); }
+function reduceCar(){ if(onlineCarNum>0) onlineCarNum--; calcOrderPrice(); }
+
+// 初始化渲染
+calcOrderPrice();
+</script>
+</body>
+</html>
