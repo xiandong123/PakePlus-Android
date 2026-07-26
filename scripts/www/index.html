@@ -1,0 +1,500 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    /* ========== 启动加载页 ========== */
+    .splash-screen {
+      position: fixed;
+      inset: 0;
+      background: #ffffff;
+      z-index: 9999;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      transition: opacity 0.8s ease;
+    }
+    .splash-fade {
+      opacity: 0;
+      pointer-events: none;
+    }
+    .brand-text {
+      font-size: 46px;
+      background: linear-gradient(90deg,#0f4b99,#22c2c2);
+      -webkit-background-clip: text;
+      color: transparent;
+      font-weight: bold;
+      margin-bottom: 30px;
+    }
+    .loading-tip {
+      font-size: 22px;
+      color: #333;
+      margin-bottom: 16px;
+    }
+    .count-num {
+      font-size: 48px;
+      font-weight: bold;
+      color: #0f67b8;
+      min-height: 60px;
+    }
+
+    /* ========== 原有页面样式完全原样保留 ========== */
+    .map-box {
+      position: relative;
+      width: 100%;
+      height: 200px;
+      background: #c5e3ff url("./lampang_map.jpg") center/cover;
+      overflow: hidden;
+    }
+    .page { display: none; }
+    .page.active { display: block; }
+    .tab-item { flex:1; text-align:center; padding:8px 0; font-size:13px; }
+    .tab-item.active { color:#2563eb; border-top:2px solid #2563eb; }
+    .pop-box {
+      position: fixed;
+      inset:0;
+      background:rgba(0,0,0,0.4);
+      z-index:99;
+      display:none;
+    }
+    .pop-box.show { display:flex; align-items:flex-end; }
+    .pop-content {
+      width:100%;
+      background:#fff;
+      border-radius:16px 16px 0 0;
+      padding:20px;
+      max-height:70vh;
+      overflow-y:auto;
+    }
+    button, .tab-item, #orderList > div {
+      touch-action: manipulation;
+      pointer-events: auto !important;
+      position: relative;
+      z-index: 10;
+      /* 关键修复：取消隐藏溢出，波纹不会被裁掉 */
+      overflow: visible;
+      transition: transform 0.15s ease;
+    }
+    /* 温和按压效果，不夸张 */
+    button:active, .tab-item:active, #orderList > div:active {
+      transform: scale(0.96);
+    }
+    .p-3, .p-2 {
+      position: relative;
+      z-index: 1;
+    }
+
+    /* ========== 优化清晰点击波纹（外围完整圆环，不会消失看不见） ========== */
+    .ripple-outer {
+      position: absolute;
+      border-radius: 50%;
+      border: 4px solid #2563eb;
+      animation: rippleAnim 0.8s ease-out forwards;
+      pointer-events: none;
+      z-index: -1;
+    }
+    .ripple-inner {
+      position: absolute;
+      border-radius: 50%;
+      background: rgba(37, 99, 235, 0.3);
+      animation: rippleAnim 0.8s ease-out forwards;
+      pointer-events: none;
+      z-index: -2;
+    }
+    @keyframes rippleAnim {
+      0 {
+        transform: scale(0.4);
+        opacity: 0.9;
+      }
+      100 {
+        transform: scale(3.2);
+        opacity: 0;
+      }
+    }
+  </style>
+</head>
+<body class="max-w-md mx-auto bg-gray-100 min-h-screen flex flex-col">
+  <!-- 启动欢迎页 -->
+  <div class="splash-screen" id="splashWrap">
+    <div class="brand-text">Ethical Ehai</div>
+    <div class="loading-tip">Entering app...</div>
+    <div class="count-num" id="countText">3</div>
+  </div>
+
+  <!-- Page 1: Order Dispatch Homepage -->
+  <div id="page-order" class="page active flex-1 overflow-y-auto">
+    <div class="p-2">
+      <div class="map-box" id="map">
+      </div>
+      <div class="bg-white p-3 text-sm space-y-2 rounded shadow">
+        <div class="flex items-center gap-2 flex-wrap">
+          <span>Online Vehicles: <span id="carCount" class="font-bold text-green-600">2</span> units</span>
+          <button id="btnAddCar" class="px-2 py-1 bg-green-500 text-white rounded text-xs">+ Vehicle</button>
+          <button id="btnReduceCar" class="px-2 py-1 bg-red-500 text-white rounded text-xs">- Vehicle (Surge Trigger)</button>
+        </div>
+        <div class="flex items-center gap-2 flex-wrap">
+          <span>Time Period:</span>
+          <button data-time="normal" class="btn-time px-2 py-1 bg-gray-300 rounded text-xs">Off-Peak</button>
+          <button data-time="rush" class="btn-time px-2 py-1 bg-orange-400 text-white rounded text-xs">Morning & Evening Rush Hour</button>
+          <button data-time="night" class="btn-time px-2 py-1 bg-indigo-500 text-white rounded text-xs">Midnight 23:00 - 06:00</button>
+        </div>
+        <div class="flex items-center gap-2 flex-wrap">
+          <span>Weather:</span>
+          <button data-weather="sun" class="btn-weather px-2 py-1 bg-yellow-300 rounded text-xs">Sunny</button>
+          <button data-weather="rain" class="btn-weather px-2 py-1 bg-blue-400 text-white rounded text-xs">Heavy Rain</button>
+        </div>
+        <div class="flex items-center gap-2 flex-wrap">
+          <span>Order Type:</span>
+          <button data-ordertype="normal" class="btn-order px-2 py-1 bg-gray-300 rounded text-xs">Standard Instant Ride</button>
+          <button data-ordertype="station" class="btn-order px-2 py-1 bg-amber-500 text-white rounded text-xs">Airport / Terminal Trip</button>
+          <button data-ordertype="cross" class="btn-order px-2 py-1 bg-rose-500 text-xs">Intercity Pre-Booking</button>
+        </div>
+      </div>
+    </div>
+    <div class="p-3 space-y-3" id="orderList"></div>
+  </div>
+
+  <!-- Page 2: Surge Pricing Rule Page -->
+  <div id="page-rule" class="page flex-1 overflow-y-auto p-4">
+    <h2 class="text-lg font-bold mb-3">Full Surge Pricing Policy</h2>
+    <div class="bg-white rounded p-4 space-y-4 shadow text-sm">
+      <div>
+        <h3 class="font-bold text-green-600">1. Real-Time Supply & Demand Surge (Core Rule)</h3>
+        <p>Fewer available vehicles means higher surge multiplier, capped at 1.5x. 100% of surge revenue belongs to drivers, platform takes no commission on surcharge.</p>
+        <p>≥4 vehicles: No surge | 2-3 vehicles: 1.2x multiplier | ≤1 vehicle: 1.7x raw (capped to 1.5x)</p>
+      </div>
+      <div>
+        <h3 class="font-bold text-orange-500">2. Time Period Surcharge</h3>
+        <p>Morning & Evening Rush Hour (07:00-09:00 / 17:00-19:00): +20% surcharge</p>
+        <p>Midnight 23:00-06:00: Fixed night service fee</p>
+      </div>
+      <div>
+        <h3 class="font-bold text-blue-500">3. Weather / Terminal / Intercity Special Surcharge</h3>
+        <p>Heavy Rain severe weather: Extra +30% markup</p>
+        <p>Airport & Train Station: Return trip terminal subsidy</p>
+        <p>Intercity long-distance: Higher base fare, tiered waiting fee</p>
+      </div>
+      <div>
+        <h3 class="font-bold text-sky-700">4. Driver Qualification Dispatch Restrictions</h3>
+        <p>✅ Full Vehicle & Driver License: Eligible for all high-surge order pools</p>
+        <p>❌ Missing one or both licenses: Only short-distance low-fare trips, no high surge access</p>
+        <p>Service Rating > 95: Priority allocation of high-surge orders; Low rating only budget trips</p>
+      </div>
+      <div>
+        <h3 class="font-bold text-gray-700">5. Settlement & Revenue Split Rules</h3>
+        <p>Platform commission cap at 27%, reduced to 25% after monthly order volume target met</p>
+        <p>Dynamic surcharges and terminal subsidies are excluded from commission calculation base</p>
+        <p>Highway tolls & parking fees paid separately by passengers, fully transferred to drivers</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- Page 3: Driver Credentials & Service Rating Page -->
+  <div id="page-driver" class="page flex-1 overflow-y-auto p-4">
+    <h2 class="text-lg font-bold mb-3">My Driver Credentials & Dispatch Access Rights</h2>
+    <div class="bg-white rounded p-4 shadow space-y-4">
+      <div class="flex justify-between items-center border-b pb-3">
+        <span>Valid Driver & Vehicle Dual Licenses</span>
+        <button id="certBtn" class="px-3 py-1 bg-green-500 text-white rounded text-xs">Licensed</button>
+      </div>
+      <div class="flex justify-between items-center border-b pb-3">
+        <span>Service Reputation Score</span>
+        <div class="flex items-center gap-2">
+          <span id="scoreText" class="text-xl font-bold text-green-600">98</span>
+          <button id="scoreBtn" class="px-2 py-1 bg-gray-400 text-white rounded text-xs">Toggle Score</button>
+        </div>
+      </div>
+      <div class="mt-4">
+        <h3 class="font-bold mb-2">Current Dispatch Permission</h3>
+        <div id="powerBox" class="p-3 rounded bg-green-100 text-sm">
+          Fully licensed + high score 98: Unlock airport, intercity, rush hour high-surge order pools with priority dispatch
+        </div>
+      </div>
+    </div>
+    <!-- 优化后的项目署名区块：更大字体、醒目配色、卡片样式 -->
+    <div class="mt-6 text-center">
+      <div class="inline-block bg-gray-50 rounded-lg px-5 py-4 shadow-sm border border-gray-200">
+        <div class="text-sm text-blue-600 font-medium mb-1">Project Brand</div>
+        <div class="text-lg font-bold text-gray-900 leading-tight">
+          Ethical Ehail
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Bottom Navigation Tabs -->
+  <div class="bg-white flex border-t mt-auto">
+    <div class="tab-item active" data-page="order">Dispatch Home</div>
+    <div class="tab-item" data-page="rule">Surge Rules</div>
+    <div class="tab-item" data-page="driver">My Credentials</div>
+  </div>
+
+  <!-- Order Settlement Detail Popup -->
+  <div id="tipBox" class="pop-box">
+    <div class="pop-content">
+      <h3 class="font-bold text-lg mb-2">Full Order Settlement Breakdown</h3>
+      <div id="tipText" class="text-sm space-y-1"></div>
+      <button id="closeTipBtn" class="mt-4 w-full bg-blue-500 text-white py-2 rounded">Close</button>
+    </div>
+  </div>
+
+<script>
+// ========== 启动页倒计时（无卡死BUG） ==========
+const splashWrap = document.getElementById('splashWrap');
+const countText = document.getElementById('countText');
+let countDownNum = 3;
+countText.innerText = countDownNum;
+const timer = setInterval(() => {
+  countDownNum--;
+  countText.innerText = countDownNum;
+  if(countDownNum <= 0) {
+    clearInterval(timer);
+    splashWrap.classList.add('splash-fade');
+    setTimeout(()=> splashWrap.style.display = 'none', 800);
+  }
+}, 1000);
+
+// 全局变量
+let onlineCarNum = 2;
+let timeMode = "normal";
+let weatherMode = "sun";
+let orderType = "normal";
+let hasCert = true;
+let serviceScore = 98;
+let clickLocked = false;
+const CLICK_DELAY = 120;
+
+const baseOrders = [
+  {id:'A', km:2.3, basePrice:18, start:'Tree Tara Hotel', end:'Homfae Beverage Shop'},
+  {id:'B', km:3.7, basePrice:25, start:'Lampang Town', end:'Highway Interchange No.11'},
+  {id:'C', km:1.2, basePrice:12, start:'Local Night Market', end:'Downtown Homestay District'},
+]
+
+// 优化波纹生成函数，定位精准，外圈完整显示
+function createStrongRipple(e, targetEl) {
+  const rect = targetEl.getBoundingClientRect();
+  const x = e.clientX - rect.left;
+  const y = e.clientY - rect.top;
+  // 外层蓝色描边圆环
+  const outer = document.createElement('span');
+  outer.className = 'ripple-outer';
+  outer.style.left = `${x - 60}px`;
+  outer.style.top = `${y - 60}px`;
+  outer.style.width = '120px';
+  outer.style.height = '120px';
+  targetEl.appendChild(outer);
+  // 内层淡蓝填充圆
+  const inner = document.createElement('span');
+  inner.className = 'ripple-inner';
+  inner.style.left = `${x - 60}px`;
+  inner.style.top = `${y - 60}px`;
+  inner.style.width = '120px';
+  inner.style.height = '120px';
+  targetEl.appendChild(inner);
+  // 自动清除动画元素
+  setTimeout(()=> outer.remove(), 800);
+  setTimeout(()=> inner.remove(), 800);
+}
+
+// 标准化绑定，防抖防重复点击，所有按钮响应稳定
+function bindTouchClick(el, callback) {
+  if(el._clickFn) el.removeEventListener('click', el._clickFn);
+  if(el._touchFn) el.removeEventListener('touchend', el._touchFn);
+
+  el._clickFn = function(e) {
+    if(clickLocked) return;
+    clickLocked = true;
+    createStrongRipple(e, el);
+    callback();
+    setTimeout(()=> clickLocked = false, CLICK_DELAY);
+  }
+  el._touchFn = function(e) {
+    e.stopPropagation();
+    if(clickLocked) return;
+    clickLocked = true;
+    createStrongRipple(e, el);
+    callback();
+    setTimeout(()=> clickLocked = false, CLICK_DELAY);
+  }
+  el.addEventListener('click', el._clickFn);
+  el.addEventListener('touchend', el._touchFn, { passive:true });
+}
+
+// 页面切换逻辑
+function switchPage(pageName, tabEl){
+  document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
+  document.getElementById(`page-${pageName}`).classList.add('active');
+  document.querySelectorAll('.tab-item').forEach(t=>t.classList.remove('active'));
+  if(tabEl) tabEl.classList.add('active');
+}
+
+// 切换证件状态
+function switchCert(){
+  hasCert = !hasCert;
+  const btn = document.getElementById('certBtn');
+  const powerBox = document.getElementById('powerBox');
+  if(hasCert){
+    btn.innerText = "Licensed";
+    btn.className = "px-3 py-1 bg-green-500 text-white rounded text-xs";
+    powerBox.className = "p-3 rounded bg-green-100 text-sm";
+    powerBox.innerHTML = "Fully licensed + high score "+serviceScore+": Unlock airport, intercity, rush hour high-surge order pools with priority dispatch";
+  }else{
+    btn.innerText = "Unlicensed";
+    btn.className = "px-3 py-1 bg-red-500 text-white rounded text-xs";
+    powerBox.className = "p-3 rounded bg-red-100 text-sm";
+    powerBox.innerHTML = "Unlicensed dispatch limit: Only short-distance budget trips, all high-surge orders locked";
+  }
+  refreshPrice();
+}
+
+// 切换服务分数
+function switchScore(){
+  serviceScore = serviceScore >=95 ? 82 : 98;
+  document.getElementById('scoreText').innerText = serviceScore;
+  switchCert();
+}
+
+// 切换时段
+function setTime(type){
+  timeMode = type;
+  refreshPrice();
+}
+// 切换天气
+function setWeather(type){
+  weatherMode = type;
+  refreshPrice();
+}
+// 切换订单类型
+function setOrderType(type){
+  orderType = type;
+  refreshPrice();
+}
+
+// 计算溢价倍率
+function getAllPremium(){
+  let descList = [];
+  let totalRate = 1;
+  let supplyRate = 1;
+  if(onlineCarNum <=1){
+    supplyRate = 1.7;
+    descList.push("Severe vehicle shortage surge +70% (capped at 1.5x)");
+  }else if(onlineCarNum <=3){
+    supplyRate = 1.2;
+    descList.push("Limited local vehicles, demand surge +20%");
+  }else{
+    descList.push("Sufficient online vehicles, no demand surge");
+  }
+  totalRate *= supplyRate;
+
+  if(timeMode === "rush"){
+    totalRate *= 1.2;
+    descList.push("Morning & evening rush hour surcharge +20%");
+  }else if(timeMode === "night"){
+    totalRate *= 1.15;
+    descList.push("Midnight service fee +15%");
+  }
+  if(weatherMode === "rain"){
+    totalRate *= 1.3;
+    descList.push("Heavy rain weather markup +30%");
+  }
+  if(orderType === "station"){
+    totalRate *= 1.18;
+    descList.push("Airport & terminal return trip subsidy +18%");
+  }else if(orderType === "cross"){
+    totalRate *= 1.4;
+    descList.push("Intercity long-distance base fare uplift +40%");
+  }
+  if(totalRate > 1.5) totalRate = 1.5;
+
+  let limitTip = "";
+  if(!hasCert || serviceScore <95){
+    totalRate = Math.min(totalRate,1.1);
+    limitTip = `<br><span class="text-red-500">⚠️ Dispatch Restriction: ${!hasCert?"Unlicensed driver":"Service score below 95"}, maximum surge locked to 1.1x</span>`;
+  }
+  return {rate: totalRate, desc: descList.join("<br>") + limitTip};
+}
+
+// 刷新订单价格（所有操作必执行，保证价格同步变动）
+function refreshPrice(){
+  const premium = getAllPremium();
+  const listDom = document.getElementById('orderList');
+  listDom.innerHTML = '';
+  document.getElementById('carCount').innerText = onlineCarNum;
+
+  baseOrders.forEach(ord=>{
+    const finalPrice = (ord.basePrice * premium.rate).toFixed(1);
+    const div = document.createElement('div');
+    div.className = 'bg-white p-4 rounded shadow cursor-pointer';
+    bindTouchClick(div, ()=>showTip(ord, finalPrice, premium));
+    div.innerHTML = `
+      <div>Trip ${ord.id} | Distance: ${ord.km} km</div>
+      <div class="text-red-500 text-lg font-bold">Total Fare: ${finalPrice} THB</div>
+      <div class="text-sm text-gray-500">Pickup: ${ord.start} → Dropoff: ${ord.end}</div>
+    `;
+    listDom.appendChild(div);
+  })
+}
+
+// 订单弹窗明细
+function showTip(order, price, premium){
+  const base = order.basePrice;
+  const driverGet = (price * 0.75).toFixed(1);
+  document.getElementById('tipText').innerHTML = `
+    <div class="border-b pb-2 mb-2">
+      <div>Base Distance Fare: ${base} THB</div>
+      <div class="mt-1">Surcharge Composition:<br>${premium.desc}</div>
+    </div>
+    <div>Total Amount Paid By Rider: <strong class="text-red-500 text-lg">${price} THB</strong></div>
+    <div class="mt-2 border-t pt-2">
+      <div>Platform Total Commission (25%): ${(price*0.25).toFixed(1)} THB</div>
+      <div class="font-bold text-green-600">Net Earnings For Driver: ${driverGet} THB</div>
+      <div class="text-xs text-gray-500 mt-1">Note: All dynamic surcharges fully belong to drivers, excluded from commission calculation</div>
+    </div>
+  `;
+  document.getElementById('tipBox').classList.add('show');
+}
+function hideTip(){
+  document.getElementById('tipBox').classList.remove('show');
+}
+
+// 增减车辆
+function addCar(){
+  onlineCarNum++;
+  refreshPrice();
+}
+function reduceCar(){
+  if(onlineCarNum>0) onlineCarNum--;
+  refreshPrice();
+}
+
+// 页面加载完成一次性绑定全部按钮
+window.addEventListener('DOMContentLoaded', function(){
+  bindTouchClick(document.getElementById('btnAddCar'), addCar);
+  bindTouchClick(document.getElementById('btnReduceCar'), reduceCar);
+
+  document.querySelectorAll('.btn-time').forEach(btn=>{
+    bindTouchClick(btn, ()=>setTime(btn.dataset.time));
+  })
+  document.querySelectorAll('.btn-weather').forEach(btn=>{
+    bindTouchClick(btn, ()=>setWeather(btn.dataset.weather));
+  })
+  document.querySelectorAll('.btn-order').forEach(btn=>{
+    bindTouchClick(btn, ()=>setOrderType(btn.dataset.ordertype));
+  })
+
+  bindTouchClick(document.getElementById('certBtn'), switchCert);
+  bindTouchClick(document.getElementById('scoreBtn'), switchScore);
+  bindTouchClick(document.getElementById('closeTipBtn'), hideTip);
+
+  document.querySelectorAll('.tab-item').forEach(tab=>{
+    bindTouchClick(tab, ()=>switchPage(tab.dataset.page, tab));
+  })
+
+  refreshPrice();
+})
+</script>
+</body>
+</html>
